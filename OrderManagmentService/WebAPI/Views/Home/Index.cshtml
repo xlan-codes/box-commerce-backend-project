@@ -1,0 +1,95 @@
+﻿@model WebAPI.Models.OIDCSettings
+@{
+    Layout = "~/Views/_Layout.cshtml";
+}
+
+<h1>OrderService API</h1>
+<textarea id="token" style="width: 100%; height: 100px;"></textarea>
+<pre id="decoded"></pre>
+<a href="/swagger">Go to Swagger UI</a>
+
+<script>
+    (() => {
+        window.config = {};
+        window.config.AUTHORIZATION_ENDPOINT = "@Model.Url/connect/authorize";
+        window.config.LOGOUT_URL = "@Model.Url/Account/LogOut";
+        window.config.CLIENT_ID = "@Model.ClientId";
+        window.config.REDIRECT_URL = "@Model.RedirectUrl";
+        window.config.RESPONSE_TYPE = "@Model.ResponseType";
+        window.config.SCOPE = "@Model.Scope";
+
+        let auth_nonce = window.nonce;
+        let auth_state = window.state;
+
+        let h = window.location.hash;
+        let authResponse = {};
+        if (h.indexOf("#") === 0) {
+            h = h.substring(1);
+            let params = h.split("&");
+            for (const param of params) {
+                let p = param.split("=");
+                authResponse[p[0]] = p[1];
+            }
+        }
+
+        let s = window.location.search;
+        let queryParams = {};
+        if (s.indexOf("?") === 0) {
+            s = s.substring(1);
+            let params = s.split("&");
+            for (const param of params) {
+                let p = param.split("=");
+                queryParams[p[0]] = p[1];
+            }
+        }
+
+        console.log("authResponse", authResponse);
+        if (!authResponse.id_token) {
+            console.log("no auth response");
+            localStorage.setItem("state", auth_state);
+
+            let loginurl = `${config.AUTHORIZATION_ENDPOINT
+                }?client_id=${encodeURI(
+                    config.CLIENT_ID
+                )}&redirect_uri=${encodeURIComponent(
+                    config.REDIRECT_URL
+                )}&response_type=${encodeURI(
+                    config.RESPONSE_TYPE
+                )}&scope=${encodeURI(
+                    config.SCOPE
+                )}&nonce=${encodeURIComponent(
+                    auth_nonce
+                )}&state=${encodeURIComponent(auth_state)}`;
+            window.location = loginurl;
+        } else {
+            if (
+                localStorage.getItem("state") !=
+                decodeURIComponent(authResponse.state)
+            )
+                throw new Error("state does not match");
+
+            window.authResponse = authResponse;
+            window.tokenData = JSON.parse(
+                atob(authResponse.access_token.split(".")[1])
+            );
+            if (!authResponse.access_token)
+                return ui.showError(window.dictionary.generalError);
+            window.token = authResponse.access_token;
+
+            window.location.hash = "";
+
+            setTimeout(() => {
+                alert("Session Expired");
+                window.location = `/`;
+            }, (parseInt(authResponse.expires_in) - 300) * 1000);
+
+            document.querySelector("textarea").textContent =
+                window.token;
+            document.querySelector("pre").innerHTML = JSON.stringify(
+                window.tokenData,
+                null,
+                2
+            );
+        }
+    })();
+</script>
